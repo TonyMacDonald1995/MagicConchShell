@@ -8,6 +8,7 @@ import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEve
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent
 import net.dv8tion.jda.api.hooks.ListenerAdapter
 import net.dv8tion.jda.api.interactions.commands.OptionType
+import net.dv8tion.jda.api.utils.FileUpload
 import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.io.InputStreamReader
@@ -93,9 +94,7 @@ class MagicConchShell : ListenerAdapter() {
             }
         }
         hook.sendMessage("Done").queue()
-        channel.sendMessage("$member requested this image using the prompt: \"$prompt\"").queue()
-        channel.sendMessage(output).queue()
-
+        channel.sendMessage("$member requested this image using the prompt: \"$prompt\"").addFiles(FileUpload.fromData(URL(output).openStream(), "image.png")).queue()
     }
 
     override fun onMessageReceived(event: MessageReceivedEvent) {
