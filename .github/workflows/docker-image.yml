@@ -12,10 +12,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Build the Docker image
-      run: docker build -t tonymacdonald1995/magicconchshell .
     - name: Push Docker image to Docker Hub
       run: |
         docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        docker build -t tonymacdonald1995/magicconchshell .
         docker push tonymacdonald1995/magicconchshell
+
 
