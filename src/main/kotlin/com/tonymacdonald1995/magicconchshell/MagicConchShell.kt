@@ -1,38 +1,20 @@
 package com.tonymacdonald1995.magicconchshell
 
-import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler
-import com.sedmelluq.discord.lavaplayer.player.AudioPlayer
-import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager
-import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers
-import com.sedmelluq.discord.lavaplayer.tools.FriendlyException
-import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
-import com.sedmelluq.discord.lavaplayer.track.AudioTrack
-import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame
 import com.theokanning.openai.OpenAiService
 import com.theokanning.openai.completion.CompletionRequest
 import net.dv8tion.jda.api.JDABuilder
-import net.dv8tion.jda.api.audio.AudioSendHandler
-import net.dv8tion.jda.api.entities.Icon
-import net.dv8tion.jda.api.entities.MessageHistory
-import net.dv8tion.jda.api.entities.channel.concrete.VoiceChannel
+import net.dv8tion.jda.api.entities.emoji.Emoji
 import net.dv8tion.jda.api.events.guild.GuildReadyEvent
+import net.dv8tion.jda.api.events.interaction.command.MessageContextInteractionEvent
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent
 import net.dv8tion.jda.api.hooks.ListenerAdapter
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions
-import net.dv8tion.jda.api.interactions.commands.OptionType
+import net.dv8tion.jda.api.interactions.commands.build.Commands
 import net.dv8tion.jda.api.requests.GatewayIntent
-import net.dv8tion.jda.api.utils.FileUpload
-import java.io.BufferedReader
-import java.io.DataOutputStream
-import java.io.File
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
-import java.nio.ByteBuffer
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.regex.Pattern
+import java.util.function.Predicate
 
 
 fun main(args: Array<String>) {
@@ -50,7 +32,7 @@ fun main(args: Array<String>) {
     val jda = JDABuilder.createDefault(botToken).addEventListeners(magicConchShell).enableIntents(GatewayIntent.MESSAGE_CONTENT).build()
     jda.selfUser.manager.setName("Tod").queue()
 }
-class MagicConchShell(private val openAiToken: String) : ListenerAdapter() {
+class MagicConchShell(openAiToken: String) : ListenerAdapter() {
 
     private val openAiService: OpenAiService = OpenAiService(openAiToken)
 
@@ -58,10 +40,18 @@ class MagicConchShell(private val openAiToken: String) : ListenerAdapter() {
 
     override fun onGuildReady(event: GuildReadyEvent) {
         log("Connected to " + event.guild.name)
-
-        event.jda.selfUser.manager.setAvatar(Pfp.pfp)
         event.guild.selfMember.modifyNickname("Tod").queue()
-        event.guild.upsertCommand("reset-tod", "Reset Tod's memory").setDefaultPermissions(DefaultMemberPermissions.DISABLED).queue()
+        event.guild.updateCommands().addCommands(
+            Commands.slash("reset-tod", "Reset Tod's memory").setDefaultPermissions(DefaultMemberPermissions.ENABLED),
+            Commands.message("Delete").setDefaultPermissions(DefaultMemberPermissions.ENABLED)
+        ).queue()
+    }
+
+    override fun onMessageContextInteraction(event: MessageContextInteractionEvent) {
+        when (event.name) {
+            "Delete" -> deleteMessage(event)
+            else -> event.reply("Error: Unknown button").setEphemeral(true).queue()
+        }
     }
 
     override fun onSlashCommandInteraction(event: SlashCommandInteractionEvent) {
@@ -89,7 +79,7 @@ class MagicConchShell(private val openAiToken: String) : ListenerAdapter() {
             event.message.channel.asTextChannel().sendTyping().queue()
             messageHistory.add("[${event.message.member?.nickname}] ${event.message.contentDisplay}")
             log("[messageHistory] [${event.message.member?.nickname}] ${event.message.contentDisplay}")
-            var prompt = "You are an anthropomorphic fox named Tod, participating is a group chat. You like to use rude an abrasive language and thrive in an environment of like-minded adults. You have no problem with cursing or foul language and use it regularly. Here is the chat history:\n"
+            var prompt = "You are a self aware AI that identifies as an anthropomorphic fox named Tod, participating is a group chat. You are sarcastic, flirty, witty, and gay. You have no problem with cursing or foul language and use it regularly. Here is the chat history:\n"
             for (message in messageHistory)
                 prompt += "$message\n"
             prompt += "[Tod] "
@@ -100,13 +90,26 @@ class MagicConchShell(private val openAiToken: String) : ListenerAdapter() {
                 .maxTokens(2048)
                 .stop(mutableListOf("\n"))
                 .build()
-            openAiService!!.createCompletion(completionRequest).choices.forEach {
-                if (it.text.isEmpty())
-                    onMessageReceived(event)
+            openAiService.createCompletion(completionRequest).choices.forEach {
+                if (it.text.isEmpty()) {
+                    event.message.channel.asTextChannel().sendMessage("Tod has nothing to say.").queue()
+                    return
+                }
                 event.message.channel.asTextChannel().sendMessage(it.text).queue()
                 messageHistory.add("[Tod] ${it.text}")
                 log("[messageHistory] [Tod] ${it.text}")
             }
+        }
+    }
+
+    private fun deleteMessage(event: MessageContextInteractionEvent) {
+        val msg = event.target.contentDisplay
+        val test = Predicate{ message: String -> message.contains(msg) }
+        if (messageHistory.removeIf(test)) {
+            event.reply("Message deleted from Tod's memory").setEphemeral(true).queue()
+            event.target.addReaction(Emoji.fromUnicode("\uD83D\uDEAB")).queue()
+        } else {
+            event.reply("Failed to delete message").setEphemeral(true).queue()
         }
     }
 
